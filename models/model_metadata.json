@@ -1,0 +1,44 @@
+{
+  "model_info": {
+    "auc_score": 1.0,
+    "cv_scores": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "feature_importance": {
+      "VARIANT_COUNT_NORM": 0.047150615602731705,
+      "HIGH_RISK_RATIO": 0.2229558825492859,
+      "RISK_SCORE_NORM": 0.7058225274085999,
+      "DRUG_WARFARIN": 0.0240709837526083,
+      "DRUG_CLOPIDOGREL": 0.0,
+      "DRUG_CODEINE": 0.0,
+      "DRUG_SIMVASTATIN": 0.0,
+      "DRUG_CARBAMAZEPINE": 0.0,
+      "TOTAL_VARIANTS": 0.0,
+      "HIGH_IMPACT_VARIANTS": 0.0,
+      "HIGH_SIGNIFICANCE_VARIANTS": 0.0,
+      "HIGH_SIGNIFICANCE_INTERACTIONS": 0.0,
+      "MODERATE_SIGNIFICANCE_INTERACTIONS": 0.0
+    }
+  },
+  "feature_columns": [
+    "VARIANT_COUNT_NORM",
+    "HIGH_RISK_RATIO",
+    "RISK_SCORE_NORM",
+    "DRUG_WARFARIN",
+    "DRUG_CLOPIDOGREL",
+    "DRUG_CODEINE",
+    "DRUG_SIMVASTATIN",
+    "DRUG_CARBAMAZEPINE",
+    "TOTAL_VARIANTS",
+    "HIGH_IMPACT_VARIANTS",
+    "HIGH_SIGNIFICANCE_VARIANTS",
+    "HIGH_SIGNIFICANCE_INTERACTIONS",
+    "MODERATE_SIGNIFICANCE_INTERACTIONS"
+  ],
+  "training_date": "2025-07-30T13:21:18.873657",
+  "model_path": "models/drug_risk_model.pkl",
+  "scaler_path": "models/scaler.pkl",
+  "features_path": "models/feature_columns.json"
+}

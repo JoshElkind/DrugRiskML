@@ -1,0 +1,324 @@
+using DrugRiskAPI.Models;
+using System.Data;
+using System.Text.Json;
+
+namespace DrugRiskAPI.Services
+{
+    public class SnowflakeService : ISnowflakeService
+    {
+        private readonly IConfiguration _configuration;
+        private readonly ILogger<SnowflakeService> _logger;
+        private readonly string _connectionString;
+
+        public SnowflakeService(IConfiguration configuration, ILogger<SnowflakeService> logger)
+        {
+            _configuration = configuration;
+            _logger = logger;
+            
+            // Build connection string from config
+            var account = _configuration["Snowflake:Account"];
+            var user = _configuration["Snowflake:User"];
+            var password = _configuration["Snowflake:Password"];
+            var warehouse = _configuration["Snowflake:Warehouse"];
+            var database = _configuration["Snowflake:Database"];
+            var schema = _configuration["Snowflake:Schema"];
+            
+            _connectionString = $"ACCOUNT={account};USER={user};PASSWORD={password};WAREHOUSE={warehouse};DATABASE={database};SCHEMA={schema};";
+        }
+
+        public async Task<bool> InitializeTablesAsync()
+        {
+            try
+            {
+                using var connection = new Snowflake.Data.Client.SnowflakeDbConnection(_connectionString);
+                await connection.OpenAsync();
+
+                // Create COMMUNITY_USER_RUNS table
+                var createUserRunsTable = @"
+                    CREATE TABLE IF NOT EXISTS COMMUNITY_USER_RUNS (
+                        ID NUMBER AUTOINCREMENT,
+                        USER_ID VARCHAR(255),
+                        DRUG_NAME VARCHAR(255),
+                        RISK_SCORE DECIMAL(5,4),
+                        RISK_LEVEL VARCHAR(50),
+                        CONFIDENCE DECIMAL(5,4),
+                        VARIANT_COUNT INTEGER,
+                        HIGH_RISK_VARIANTS INTEGER,
+                        CLINICAL_EVIDENCE TEXT,
+                        RECOMMENDATIONS TEXT,
+                        CREATED_AT TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+                        UPDATED_AT TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
+                    )";
+
+                using var command1 = new Snowflake.Data.Client.SnowflakeCommand(createUserRunsTable, connection);
+                await command1.ExecuteNonQueryAsync();
+
+                // Create COMMUNITY_VCF_DATA table
+                var createVcfDataTable = @"
+                    CREATE TABLE IF NOT EXISTS COMMUNITY_VCF_DATA (
+                        ID NUMBER AUTOINCREMENT,
+                        USER_RUN_ID NUMBER,
+                        CHROMOSOME VARCHAR(10),
+                        POSITION NUMBER,
+                        REFERENCE_ALLELE VARCHAR(10),
+                        ALTERNATE_ALLELE VARCHAR(10),
+                        GENE VARCHAR(100),
+                        IMPACT VARCHAR(50),
+                        CLINICAL_SIGNIFICANCE VARCHAR(50),
+                        DRUG_INTERACTIONS TEXT,
+                        CREATED_AT TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
+                    )";
+
+                using var command2 = new Snowflake.Data.Client.SnowflakeCommand(createVcfDataTable, connection);
+                await command2.ExecuteNonQueryAsync();
+
+                // Create COMMUNITY_DRUG_ALTERNATIVES table
+                var createAlternativesTable = @"
+                    CREATE TABLE IF NOT EXISTS COMMUNITY_DRUG_ALTERNATIVES (
+                        ID NUMBER AUTOINCREMENT,
+                        USER_RUN_ID NUMBER,
+                        ALTERNATIVE_DRUG VARCHAR(255),
+                        REASON TEXT,
+                        CONFIDENCE_SCORE DECIMAL(5,4),
+                        CLINICAL_EVIDENCE TEXT,
+                        DOSAGE_RECOMMENDATION TEXT,
+                        MONITORING_REQUIREMENTS TEXT,
+                        CREATED_AT TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
+                    )";
+
+                using var command3 = new Snowflake.Data.Client.SnowflakeCommand(createAlternativesTable, connection);
+                await command3.ExecuteNonQueryAsync();
+
+                _logger.LogInformation("Snowflake tables initialized successfully");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error initializing Snowflake tables");
+                return false;
+            }
+        }
+
+        public async Task<bool> SyncUserRunToSnowflakeAsync(UserRun userRun)
+        {
+            try
+            {
+                using var connection = new Snowflake.Data.Client.SnowflakeDbConnection(_connectionString);
+                await connection.OpenAsync();
+
+                // Insert user run
+                var insertUserRun = @"
+                    INSERT INTO COMMUNITY_USER_RUNS (
+                        USER_ID, DRUG_NAME, RISK_SCORE, RISK_LEVEL, 
+                        VARIANT_COUNT, HIGH_RISK_VARIANTS, CLINICAL_EVIDENCE, RECOMMENDATIONS
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+
+                using var command1 = new Snowflake.Data.Client.SnowflakeCommand(insertUserRun, connection);
+                command1.Parameters.Add("USER_ID", DbType.String).Value = userRun.UserId;
+                command1.Parameters.Add("DRUG_NAME", DbType.String).Value = userRun.DrugName;
+                command1.Parameters.Add("RISK_SCORE", DbType.Decimal).Value = userRun.RiskScore;
+                command1.Parameters.Add("RISK_LEVEL", DbType.String).Value = userRun.RiskLevel;
+                command1.Parameters.Add("VARIANT_COUNT", DbType.Int32).Value = userRun.RiskAssessment?.VariantCount ?? 0;
+                command1.Parameters.Add("HIGH_RISK_VARIANTS", DbType.Int32).Value = userRun.RiskAssessment?.HighRiskVariants ?? 0;
+                command1.Parameters.Add("CLINICAL_EVIDENCE", DbType.String).Value = userRun.RiskAssessment?.ClinicalEvidence ?? "";
+                command1.Parameters.Add("RECOMMENDATIONS", DbType.String).Value = userRun.RiskAssessment?.Recommendations ?? "";
+
+                await command1.ExecuteNonQueryAsync();
+
+                // Get the inserted user run ID
+                var getUserRunId = "SELECT LAST_INSERT_ID()";
+                using var command2 = new Snowflake.Data.Client.SnowflakeCommand(getUserRunId, connection);
+                var userRunId = await command2.ExecuteScalarAsync();
+
+                // Insert VCF data
+                if (userRun.VcfData.Any())
+                {
+                    var insertVcfData = @"
+                        INSERT INTO COMMUNITY_VCF_DATA (
+                            USER_RUN_ID, CHROMOSOME, POSITION, REFERENCE_ALLELE, 
+                            ALTERNATE_ALLELE, GENE, IMPACT, CLINICAL_SIGNIFICANCE, DRUG_INTERACTIONS
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+                    using var command3 = new Snowflake.Data.Client.SnowflakeCommand(insertVcfData, connection);
+                    
+                    foreach (var vcf in userRun.VcfData)
+                    {
+                        command3.Parameters.Clear();
+                        command3.Parameters.Add("USER_RUN_ID", DbType.Int64).Value = userRunId;
+                        command3.Parameters.Add("CHROMOSOME", DbType.String).Value = vcf.Chromosome;
+                        command3.Parameters.Add("POSITION", DbType.Int64).Value = vcf.Position;
+                        command3.Parameters.Add("REFERENCE_ALLELE", DbType.String).Value = vcf.ReferenceAllele;
+                        command3.Parameters.Add("ALTERNATE_ALLELE", DbType.String).Value = vcf.AlternateAllele;
+                        command3.Parameters.Add("GENE", DbType.String).Value = vcf.Gene ?? "";
+                        command3.Parameters.Add("IMPACT", DbType.String).Value = vcf.Impact ?? "";
+                        command3.Parameters.Add("CLINICAL_SIGNIFICANCE", DbType.String).Value = vcf.ClinicalSignificance ?? "";
+                        command3.Parameters.Add("DRUG_INTERACTIONS", DbType.String).Value = vcf.DrugInteractions ?? "";
+
+                        await command3.ExecuteNonQueryAsync();
+                    }
+                }
+
+                // Insert drug alternatives
+                if (userRun.DrugAlternatives.Any())
+                {
+                    var insertAlternatives = @"
+                        INSERT INTO COMMUNITY_DRUG_ALTERNATIVES (
+                            USER_RUN_ID, ALTERNATIVE_DRUG, REASON, CONFIDENCE_SCORE,
+                            CLINICAL_EVIDENCE, DOSAGE_RECOMMENDATION, MONITORING_REQUIREMENTS
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?)";
+
+                    using var command4 = new Snowflake.Data.Client.SnowflakeCommand(insertAlternatives, connection);
+                    
+                    foreach (var alt in userRun.DrugAlternatives)
+                    {
+                        command4.Parameters.Clear();
+                        command4.Parameters.Add("USER_RUN_ID", DbType.Int64).Value = userRunId;
+                        command4.Parameters.Add("ALTERNATIVE_DRUG", DbType.String).Value = alt.AlternativeDrug;
+                        command4.Parameters.Add("REASON", DbType.String).Value = alt.Reason;
+                        command4.Parameters.Add("CONFIDENCE_SCORE", DbType.Decimal).Value = alt.ConfidenceScore;
+                        command4.Parameters.Add("CLINICAL_EVIDENCE", DbType.String).Value = alt.ClinicalEvidence;
+                        command4.Parameters.Add("DOSAGE_RECOMMENDATION", DbType.String).Value = alt.DosageRecommendation;
+                        command4.Parameters.Add("MONITORING_REQUIREMENTS", DbType.String).Value = alt.MonitoringRequirements;
+
+                        await command4.ExecuteNonQueryAsync();
+                    }
+                }
+
+                _logger.LogInformation("Successfully synced user run {UserRunId} to Snowflake", userRun.Id);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error syncing user run {UserRunId} to Snowflake", userRun.Id);
+                return false;
+            }
+        }
+
+        public async Task<bool> SyncCommunityAnalyticsAsync()
+        {
+            try
+            {
+                using var connection = new Snowflake.Data.Client.SnowflakeDbConnection(_connectionString);
+                await connection.OpenAsync();
+
+                // Create analytics view
+                var createAnalyticsView = @"
+                    CREATE OR REPLACE VIEW COMMUNITY_ANALYTICS_VIEW AS
+                    SELECT 
+                        DRUG_NAME,
+                        COUNT(*) as TOTAL_RUNS,
+                        AVG(RISK_SCORE) as AVG_RISK_SCORE,
+                        COUNT(CASE WHEN RISK_LEVEL = 'HIGH_RISK' THEN 1 END) as HIGH_RISK_COUNT,
+                        COUNT(CASE WHEN RISK_LEVEL = 'MODERATE_RISK' THEN 1 END) as MODERATE_RISK_COUNT,
+                        COUNT(CASE WHEN RISK_LEVEL = 'LOW_RISK' THEN 1 END) as LOW_RISK_COUNT,
+                        AVG(VARIANT_COUNT) as AVG_VARIANT_COUNT,
+                        AVG(HIGH_RISK_VARIANTS) as AVG_HIGH_RISK_VARIANTS
+                    FROM COMMUNITY_USER_RUNS
+                    GROUP BY DRUG_NAME";
+
+                using var command = new Snowflake.Data.Client.SnowflakeCommand(createAnalyticsView, connection);
+                await command.ExecuteNonQueryAsync();
+
+                _logger.LogInformation("Community analytics view created successfully");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating community analytics view");
+                return false;
+            }
+        }
+
+        public async Task<List<Dictionary<string, object>>> GetCommunityAnalyticsAsync(string? drugName = null)
+        {
+            try
+            {
+                using var connection = new Snowflake.Data.Client.SnowflakeDbConnection(_connectionString);
+                await connection.OpenAsync();
+
+                var query = @"
+                    SELECT 
+                        DRUG_NAME,
+                        TOTAL_RUNS,
+                        AVG_RISK_SCORE,
+                        HIGH_RISK_COUNT,
+                        MODERATE_RISK_COUNT,
+                        LOW_RISK_COUNT,
+                        AVG_VARIANT_COUNT,
+                        AVG_HIGH_RISK_VARIANTS
+                    FROM COMMUNITY_ANALYTICS_VIEW";
+
+                if (!string.IsNullOrEmpty(drugName))
+                {
+                    query += " WHERE DRUG_NAME = ?";
+                }
+
+                using var command = new Snowflake.Data.Client.SnowflakeCommand(query, connection);
+                if (!string.IsNullOrEmpty(drugName))
+                {
+                    command.Parameters.Add("DRUG_NAME", DbType.String).Value = drugName;
+                }
+
+                using var reader = await command.ExecuteReaderAsync();
+                var results = new List<Dictionary<string, object>>();
+
+                while (await reader.ReadAsync())
+                {
+                    var row = new Dictionary<string, object>();
+                    for (int i = 0; i < reader.FieldCount; i++)
+                    {
+                        row[reader.GetName(i)] = reader.GetValue(i);
+                    }
+                    results.Add(row);
+                }
+
+                return results;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting community analytics from Snowflake");
+                return new List<Dictionary<string, object>>();
+            }
+        }
+
+        public async Task<Dictionary<string, object>> GetAnalyticsSummaryAsync()
+        {
+            try
+            {
+                using var connection = new Snowflake.Data.Client.SnowflakeDbConnection(_connectionString);
+                await connection.OpenAsync();
+
+                var query = @"
+                    SELECT 
+                        COUNT(*) as TOTAL_ASSESSMENTS,
+                        COUNT(DISTINCT USER_ID) as UNIQUE_USERS,
+                        COUNT(DISTINCT DRUG_NAME) as UNIQUE_DRUGS,
+                        AVG(RISK_SCORE) as OVERALL_AVG_RISK,
+                        COUNT(CASE WHEN RISK_LEVEL = 'HIGH_RISK' THEN 1 END) as TOTAL_HIGH_RISK,
+                        COUNT(CASE WHEN RISK_LEVEL = 'MODERATE_RISK' THEN 1 END) as TOTAL_MODERATE_RISK,
+                        COUNT(CASE WHEN RISK_LEVEL = 'LOW_RISK' THEN 1 END) as TOTAL_LOW_RISK
+                    FROM COMMUNITY_USER_RUNS";
+
+                using var command = new Snowflake.Data.Client.SnowflakeCommand(query, connection);
+                using var reader = await command.ExecuteReaderAsync();
+
+                if (await reader.ReadAsync())
+                {
+                    var summary = new Dictionary<string, object>();
+                    for (int i = 0; i < reader.FieldCount; i++)
+                    {
+                        summary[reader.GetName(i)] = reader.GetValue(i);
+                    }
+                    return summary;
+                }
+
+                return new Dictionary<string, object>();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting analytics summary from Snowflake");
+                return new Dictionary<string, object>();
+            }
+        }
+    }
+} 
