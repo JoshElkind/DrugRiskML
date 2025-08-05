@@ -1,0 +1,235 @@
+.assessment {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.assessment-header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.assessment-header h1 {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+  color: #333;
+}
+
+.assessment-header p {
+  color: #666;
+  font-size: 1.1rem;
+}
+
+.assessment-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3rem;
+  align-items: start;
+}
+
+.assessment-form {
+  background: white;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: #333;
+}
+
+.form-control {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: border-color 0.3s ease;
+  font-family: inherit;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.file-input {
+  padding: 0.5rem;
+}
+
+.form-help {
+  display: block;
+  margin-top: 0.25rem;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.vcf-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.btn {
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: none;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.btn-primary {
+  background: #667eea;
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #5a6fd8;
+  transform: translateY(-2px);
+}
+
+.btn-primary:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-secondary {
+  background: #6c757d;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background: #5a6268;
+  transform: translateY(-2px);
+}
+
+.btn-outline {
+  background: transparent;
+  color: #667eea;
+  border: 2px solid #667eea;
+}
+
+.btn-outline:hover {
+  background: #667eea;
+  color: white;
+}
+
+.btn-large {
+  padding: 1rem 2rem;
+  font-size: 1.1rem;
+  width: 100%;
+  margin-top: 1rem;
+}
+
+.error-message {
+  background: #fff5f5;
+  border: 1px solid #dc3545;
+  color: #dc3545;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.success-message {
+  background: #f0fff4;
+  border: 1px solid #68d391;
+  color: #22543d;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.assessment-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.info-card {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.info-card h3 {
+  margin: 0 0 1rem 0;
+  color: #333;
+  font-size: 1.2rem;
+}
+
+.info-card p {
+  color: #666;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.info-card ul {
+  color: #666;
+  line-height: 1.6;
+  margin: 0;
+  padding-left: 1.5rem;
+}
+
+.info-card li {
+  margin-bottom: 0.5rem;
+}
+
+.supported-drugs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+}
+
+.drug-item {
+  background: #f8f9ff;
+  padding: 0.75rem;
+  border-radius: 8px;
+  border-left: 4px solid #667eea;
+}
+
+.drug-item strong {
+  display: block;
+  color: #333;
+  margin-bottom: 0.25rem;
+}
+
+.drug-item span {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 768px) {
+  .assessment {
+    padding: 1rem;
+  }
+  
+  .assessment-container {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+  
+  .assessment-header h1 {
+    font-size: 2rem;
+  }
+  
+  .vcf-actions {
+    flex-direction: column;
+  }
+  
+  .supported-drugs {
+    grid-template-columns: 1fr;
+  }
+} 
