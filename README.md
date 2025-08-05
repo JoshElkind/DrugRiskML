@@ -27,7 +27,7 @@ Drug Risk Assessment Platform is a comprehensive pharmacogenomics application th
 The platform follows a microservices architecture with distributed data processing. VCF files are uploaded to AWS S3, triggering Apache Airflow DAGs that execute Scala ETL pipelines using Apache Spark for distributed processing. Processed data flows into Snowflake data warehouse, where ensemble ML models (XGBoost, Random Forest, Logistic Regression) are trained and deployed. The .NET Core backend API serves predictions while React frontend provides user interface. Tableau dashboards visualize analytics and results. The entire system is containerized with Docker for consistent deployment across environments.
 
 ## Demo Video
-<sub>full platform demonstration</sub>
+<sub>Full Platform Video Demo (PLEASE DOWNLOAD TO VIEW sorry!)</sub>
 ![Demo Video](demo-assets/drug_risk_demo_final.mp4)
 
 ## Demo Screenshots
